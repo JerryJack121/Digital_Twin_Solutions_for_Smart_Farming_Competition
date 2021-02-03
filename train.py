@@ -11,6 +11,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.optim import lr_scheduler
 from utils.Setloader import Setloader
+from sklearn.metrics import f1_score, hamming_loss
 
 PATH = r'D:\dataset\2021智慧農業數位分身創新應用競賽\generate_dateset'
 
@@ -21,6 +22,9 @@ label = np.array(label, dtype=np.float32)
 print(data.shape)
 print(label.shape)
 
+# 打散資料
+indices = np.random.permutation(data.shape[0])
+data = data[indices]
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -30,9 +34,10 @@ else:
 
 # 參數設計
 batch_size = data.shape[0]
-epochs = 10
-train_rate = 0.7    # 訓練資料集的比例
-lr = 0.0001
+epochs = 100
+train_rate = 0.8    # 訓練資料集的比例
+lr = 0.001
+threshold = torch.tensor([0.5])
 
 # 切割訓練驗證集
 train_num = int(data.shape[0]*train_rate)
@@ -53,12 +58,14 @@ model.to(device)
 # 定義優化器、損失函數
 criterion = nn.MSELoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr) 
-scheduler = lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.9)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
 
 loss_list = []
 val_loss_list = []
+f1_list = []
+lr_list = []
 for epoch in range(1, epochs+1):
-    print('running epoch: {} / {}'.format(epoch, epochs))
+    print('\nrunning epoch: {} / {}'.format(epoch, epochs))
     # 訓練模式
     model.train()
     total_loss = 0
@@ -78,21 +85,27 @@ for epoch in range(1, epochs+1):
             pbar.set_postfix(
                     **{
                         'running_loss': running_loss,
+                        'lr': optimizer.state_dict()['param_groups'][0]['lr']
                     })
             pbar.update(1)
-    # scheduler.step()
+    scheduler.step()
 
     #評估模式
     model.eval()
+    outputs_list = []
     total_val_loss = 0
     with tqdm(valloader) as pbar:
         with torch.no_grad():
             for inputs, target in valloader:
                 inputs, target = inputs.to(device), target.to(device)
                 inputs=inputs.permute(1,0,2)
-                predict = model(inputs)
-                running_val_loss = criterion(predict, target).item()
+                outputs = model(inputs)
+                running_val_loss = criterion(outputs, target).item()
                 total_val_loss += running_val_loss*inputs.shape[1]
+                outputs = (outputs.cpu() > threshold).float()*1
+                # for output in outputs:
+                #     outputs_list.append(output)
+                outputs_list = np.vstack(outputs)
                 #更新進度條
                 pbar.set_description('validation')
                 pbar.set_postfix(
@@ -104,4 +117,33 @@ for epoch in range(1, epochs+1):
     val_loss = total_val_loss/len(valloader.dataset)
     loss_list.append(loss)
     val_loss_list.append(val_loss)
-    print('train_loss: {:.4f}, valid_loss: {:.4f}, lr:{:.1e}'.format(loss, val_loss, scheduler.get_last_lr()[0]) )
+    f1 = f1_score(val_y, outputs_list, average="macro")
+    f1_list.append(f1)
+    lr_list.append(optimizer.state_dict()['param_groups'][0]['lr'])
+    print('train_loss: {:.4f}, valid_loss: {:.4f}'.format(loss, val_loss))
+    print('f1_score:{:.6f}, hamming_loss:{:.4f}'.format(f1, hamming_loss(val_y, outputs_list)))
+    torch.save(model.state_dict(), './logs/epoch%d-loss%.4f-val_loss%.4f-f1%.4f.pth' %(epoch, loss, val_loss, f1))
+
+#繪製圖
+plt.figure()
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.plot(loss_list, label='Loss')
+plt.plot(val_loss_list, label='Val Loss')
+plt.legend(loc='best')
+plt.savefig('./images/loss.jpg')
+plt.show()
+
+plt.figure()
+plt.xlabel('Epochs')
+plt.ylabel('f1 score')
+plt.plot(f1_list)
+plt.savefig('./images/f1.jpg')
+plt.show()
+
+plt.figure()
+plt.xlabel('Epochs')
+plt.ylabel('Learning Rate')
+plt.plot(lr_list, label='lr')
+plt.savefig('./images/lr.jpg')
+plt.show()
