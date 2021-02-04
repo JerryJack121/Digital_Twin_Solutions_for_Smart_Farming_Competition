@@ -12,3 +12,13 @@ class Setloader(Dataset):
 
     def __len__(self):
         return self.data.shape[0]
+
+class TestSetloader(Dataset):
+    def __init__(self, data):
+        super(TestSetloader, self).__init__()
+        self.data = data
+    def __getitem__(self, index):
+        return self.data[index]
+
+    def __len__(self):
+        return self.data.shape[0]

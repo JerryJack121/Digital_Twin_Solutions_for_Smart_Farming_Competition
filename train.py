@@ -61,8 +61,8 @@ model.to(device)
 
 # 定義優化器、損失函數
 criterion = nn.MSELoss().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr) 
-scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+optimizer = torch.optim.AdamW(model.parameters(), lr=lr) 
+scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.9)
 # scheduler = lr_scheduler.CosineAnnealingLR(optimizer,
 #                                            T_max=20,
 #                                            eta_min=1e-6,
@@ -96,7 +96,7 @@ for epoch in range(1, epochs+1):
                         'lr': optimizer.state_dict()['param_groups'][0]['lr']
                     })
             pbar.update(1)
-    scheduler.step()
+    # scheduler.step()
 
     #評估模式
     model.eval()
