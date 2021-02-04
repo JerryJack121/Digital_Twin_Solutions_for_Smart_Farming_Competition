@@ -33,18 +33,19 @@ else:
     device = torch.device('cpu')
 
 # 參數設計
-batch_size = data.shape[0]
+# batch_size = data.shape[0]
+batch_size = 15000
 epochs = 100
 train_rate = 0.8    # 訓練資料集的比例
-lr = 0.001
+lr = 1e-3
 threshold = torch.tensor([0.5])
 
 # 切割訓練驗證集
 train_num = int(data.shape[0]*train_rate)
 train_x = torch.tensor(data[:train_num], dtype=torch.float)
 train_y = torch.tensor(label[:train_num])
-val_x = torch.tensor(data[:train_num], dtype=torch.float)
-val_y = torch.tensor(label[:train_num])
+val_x = torch.tensor(data[train_num:], dtype=torch.float)
+val_y = torch.tensor(label[train_num:])
 trainset = Setloader(train_x, train_y)
 valset = Setloader(val_x, val_y)
 
@@ -55,10 +56,17 @@ valloader = DataLoader(valset, batch_size=batch_size, shuffle=True)
 model = rnn.rnn(input_size=18, output_size=11)
 model.to(device)
 
+# 載入預訓練權重
+# model.load_state_dict(torch.load('./weights/epoch100-loss0.0736-val_loss0.0677-f10.7676.pth'))
+
 # 定義優化器、損失函數
 criterion = nn.MSELoss().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr) 
 scheduler = lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
+# scheduler = lr_scheduler.CosineAnnealingLR(optimizer,
+#                                            T_max=20,
+#                                            eta_min=1e-6,
+#                                            last_epoch=-1)
 
 loss_list = []
 val_loss_list = []
@@ -72,7 +80,7 @@ for epoch in range(1, epochs+1):
     with tqdm(trainloader) as pbar:
         for inputs, target in trainloader:
             inputs, target = inputs.to(device), target.to(device)
-            inputs=inputs.permute(1,0,2)
+            inputs=inputs.permute(1,0,2)    # (sequence, batch, data)
             predict = model(inputs)
             loss = criterion(predict, target)
             running_loss = loss.item()
@@ -92,7 +100,7 @@ for epoch in range(1, epochs+1):
 
     #評估模式
     model.eval()
-    outputs_list = []
+    outputs_list = np.empty((0,11))
     total_val_loss = 0
     with tqdm(valloader) as pbar:
         with torch.no_grad():
@@ -103,9 +111,7 @@ for epoch in range(1, epochs+1):
                 running_val_loss = criterion(outputs, target).item()
                 total_val_loss += running_val_loss*inputs.shape[1]
                 outputs = (outputs.cpu() > threshold).float()*1
-                # for output in outputs:
-                #     outputs_list.append(output)
-                outputs_list = np.vstack(outputs)
+                outputs_list = np.vstack((outputs_list, outputs))
                 #更新進度條
                 pbar.set_description('validation')
                 pbar.set_postfix(
