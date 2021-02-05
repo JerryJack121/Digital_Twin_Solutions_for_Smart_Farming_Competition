@@ -10,15 +10,15 @@ import math
 from tqdm import tqdm
 from utils.Setloader import TestSetloader
 
-PATH_submission_example = r'D:\dataset\2021智慧農業數位分身創新應用競賽\org\submission_example.csv'
-PATH_submission = r'D:\dataset\2021智慧農業數位分身創新應用競賽\org\submission.csv'
+PATH_submission_example = r'./results/submission_example.csv'
+PATH_submission = r'./results/submission.csv'
 PATH_test = r'D:\dataset\2021智慧農業數位分身創新應用競賽\generate_dateset\test_data.npy'
 
 threshold = torch.tensor([0.5])
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
-    print('Train on GPU...')
+    print('Test on GPU...')
 else:
     device = torch.device('cpu')
 
